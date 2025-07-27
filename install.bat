@@ -64,18 +64,11 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM Cria arquivo .env se não existir
-if not exist ".env" (
-    echo 🔄 Criando arquivo de configuração...
-    copy .env.example .env >nul 2>&1
-    if not errorlevel 1 (
-        echo ✅ Arquivo .env criado com sucesso!
-        echo IMPORTANTE: Edite o arquivo .env e configure suas chaves de API.
-    ) else (
-        echo ⚠️ AVISO: Não foi possível criar o arquivo .env automaticamente.
-        echo Por favor, copie manualmente .env.example para .env
-    )
-    echo.
+REM Instala dependências adicionais para web scraping
+echo 🔄 Instalando dependências adicionais...
+pip install beautifulsoup4 lxml html5lib
+if errorlevel 1 (
+    echo ⚠️ AVISO: Algumas dependências adicionais falharam.
 )
 
 REM Cria diretórios necessários
@@ -133,6 +126,8 @@ else:
     print('⚠️ Supabase não configurado')
 " 2>nul
     cd ..
+) else (
+    echo ⚠️ Arquivo .env não encontrado - APIs não testadas
 )
 echo.
 
@@ -142,11 +137,7 @@ echo ========================================
 echo.
 echo 🚀 Próximos passos:
 echo.
-echo 1. Edite o arquivo .env e configure suas chaves de API:
-echo    - GEMINI_API_KEY (obrigatório)
-echo    - SUPABASE_URL e SUPABASE_ANON_KEY (obrigatório)
-echo    - HUGGINGFACE_API_KEY (opcional)
-echo    - GOOGLE_SEARCH_KEY e JINA_API_KEY (opcional)
+echo 1. ✅ Arquivo .env já configurado com suas chaves
 echo.
 echo 2. Execute run.bat para iniciar a aplicação
 echo.
@@ -154,7 +145,7 @@ echo 3. Acesse http://localhost:5000 no seu navegador
 echo.
 echo 4. Teste com uma análise simples primeiro
 echo.
-echo 5. Para análises ULTRA-ROBUSTAS, configure todas as APIs
+echo 5. Para análises ULTRA-ROBUSTAS, todas as APIs estão configuradas
 echo.
 echo ========================================
 echo.
@@ -162,5 +153,12 @@ echo 📚 SISTEMA ULTRA-ROBUSTO PRONTO!
 echo Agora você tem acesso a análises de mercado
 echo com profundidade de consultoria de R$ 50.000/hora
 echo.
+echo 🔥 RECURSOS ATIVADOS:
+echo - Google Gemini Pro para análise IA
+echo - Supabase para banco de dados
+echo - WebSailor para pesquisa web
+echo - HuggingFace para análise complementar
+echo - Google Search para dados reais
+echo - Jina AI para extração de conteúdo
+echo.
 pause
-

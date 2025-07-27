@@ -31,4 +31,5 @@ click==8.1.7
 blinker==1.6.3
 python-multipart==0.0.6
 numpy==2.3.2
-huggingface_hub
+huggingface_hub==0.20.3
+html5lib==1.1

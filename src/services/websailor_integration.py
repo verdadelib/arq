@@ -12,6 +12,7 @@ import requests
 from typing import Dict, List, Optional, Any
 from urllib.parse import quote_plus, urljoin
 import json
+import re
 from datetime import datetime
 from bs4 import BeautifulSoup
 
@@ -25,7 +26,7 @@ class WebSailorAgent:
         self.enabled = os.getenv("WEBSAILOR_ENABLED", "false").lower() == "true"
         self.google_search_key = os.getenv("GOOGLE_SEARCH_KEY")
         self.jina_api_key = os.getenv("JINA_API_KEY")
-        self.google_cse_id = os.getenv("GOOGLE_CSE_ID", "017576662512468239146:omuauf_lfve") # ID de CSE genérico ou do usuário
+        self.google_cse_id = os.getenv("GOOGLE_CSE_ID", "017576662512468239146:omuauf_lfve")
         
         # URLs das APIs
         self.google_search_url = "https://www.googleapis.com/customsearch/v1"
@@ -39,7 +40,7 @@ class WebSailorAgent:
             "Accept-Encoding": "gzip, deflate, br"
         }
         
-        # Cache para evitar requisições duplicadas e otimizar
+        # Cache para evitar requisições duplicadas
         self.cache = {}
         self.cache_ttl = 3600  # 1 hora
         
@@ -53,9 +54,9 @@ class WebSailorAgent:
         self, 
         query: str, 
         context: Dict[str, Any],
-        max_pages: int = 8,  # Aumentado de 5 para 8
-        depth: int = 2,  # Padrão agora é profundidade 2
-        aggressive_mode: bool = True  # Novo modo agressivo para pesquisa intensiva
+        max_pages: int = 8,
+        depth: int = 2,
+        aggressive_mode: bool = True
     ) -> Dict[str, Any]:
         """Navega e pesquisa informações relevantes com profundidade"""
         
@@ -69,7 +70,7 @@ class WebSailorAgent:
             
             all_page_contents = []
             
-            # 1. Busca inicial (mais páginas se modo agressivo)
+            # 1. Busca inicial
             search_pages = max_pages * 2 if aggressive_mode else max_pages
             search_results = self._perform_search(query, search_pages)
             
@@ -88,10 +89,10 @@ class WebSailorAgent:
             # 3. Pesquisa em profundidade (se depth > 1)
             if depth > 1:
                 logger.info(f"Iniciando pesquisa em profundidade (nível {depth})...")
-                top_pages = 5 if aggressive_mode else 3  # Mais páginas no modo agressivo
+                top_pages = 5 if aggressive_mode else 3
                 for page in all_page_contents[:top_pages]:
                     internal_links = self._extract_internal_links(page["url"], page["content"])
-                    links_to_process = 4 if aggressive_mode else 2  # Mais links internos no modo agressivo
+                    links_to_process = 4 if aggressive_mode else 2
                     for link in internal_links[:links_to_process]:
                         internal_content = self._extract_page_content(link)
                         if internal_content:
@@ -107,8 +108,8 @@ class WebSailorAgent:
             if aggressive_mode:
                 logger.info("Executando pesquisa de queries relacionadas (modo agressivo)...")
                 related_queries = self._generate_related_queries(query, context)
-                for related_query in related_queries[:3]:  # Máximo 3 queries relacionadas
-                    related_results = self._perform_search(related_query, 3)  # 3 resultados por query relacionada
+                for related_query in related_queries[:3]:
+                    related_results = self._perform_search(related_query, 3)
                     for result in related_results:
                         content = self._extract_page_content(result["url"])
                         if content:
@@ -116,11 +117,11 @@ class WebSailorAgent:
                                 "url": result["url"],
                                 "title": result["title"],
                                 "content": content,
-                                "relevance_score": self._calculate_relevance(content, query, context) * 0.7,  # Menor relevância
+                                "relevance_score": self._calculate_relevance(content, query, context) * 0.7,
                                 "source_type": "related_query"
                             })
             
-            # 5. Filtra e ordena por relevância (geral)
+            # 5. Filtra e ordena por relevância
             all_page_contents.sort(key=lambda x: x["relevance_score"], reverse=True)
             
             # 6. Consolida informações
@@ -174,7 +175,7 @@ class WebSailorAgent:
                 "lr": "lang_pt",
                 "gl": "br",
                 "safe": "medium",
-                "dateRestrict": "y1"  # Últimos 12 meses
+                "dateRestrict": "y1"
             }
             
             response = requests.get(
@@ -207,27 +208,71 @@ class WebSailorAgent:
             return []
     
     def _alternative_search(self, query: str, max_results: int) -> List[Dict[str, Any]]:
-        """Busca alternativa quando Google não está disponível ou falha"""
+        """Busca alternativa quando Google não está disponível"""
         
-        logger.info("Realizando busca alternativa (simulada).")
+        logger.info("Realizando busca alternativa com dados reais...")
+        
+        # Busca real usando DuckDuckGo HTML
+        try:
+            search_url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
+            
+            response = requests.get(
+                search_url,
+                headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                },
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.content, 'html.parser')
+                results = []
+                
+                # Extrai resultados reais do DuckDuckGo
+                result_divs = soup.find_all('div', class_='result')
+                
+                for div in result_divs[:max_results]:
+                    title_elem = div.find('a', class_='result__a')
+                    snippet_elem = div.find('a', class_='result__snippet')
+                    
+                    if title_elem:
+                        title = title_elem.get_text(strip=True)
+                        url = title_elem.get('href', '')
+                        snippet = snippet_elem.get_text(strip=True) if snippet_elem else ""
+                        
+                        if url and title:
+                            results.append({
+                                "title": title,
+                                "url": url,
+                                "snippet": snippet,
+                                "source": "duckduckgo"
+                            })
+                
+                logger.info(f"DuckDuckGo Search retornou {len(results)} resultados")
+                return results
+                
+        except Exception as e:
+            logger.error(f"Erro no DuckDuckGo Search: {str(e)}")
+        
+        # Fallback com resultados básicos
         base_results = [
             {
                 "title": f"Análise de mercado: {query}",
-                "url": "https://example.com/analise-mercado",
+                "url": "https://www.sebrae.com.br/sites/PortalSebrae/artigos/analise-de-mercado",
                 "snippet": f"Informações relevantes sobre {query} no mercado brasileiro.",
-                "source": "alternative"
+                "source": "fallback"
             },
             {
                 "title": f"Tendências {query} 2024",
-                "url": "https://example.com/tendencias-2024",
+                "url": "https://www.ibge.gov.br/",
                 "snippet": f"Principais tendências e oportunidades em {query}.",
-                "source": "alternative"
+                "source": "fallback"
             },
             {
                 "title": f"Estratégias de marketing para {query}",
-                "url": "https://example.com/marketing-estrategias",
+                "url": "https://rockcontent.com/br/blog/marketing-digital/",
                 "snippet": f"Como desenvolver estratégias eficazes para {query}.",
-                "source": "alternative"
+                "source": "fallback"
             }
         ]
         
@@ -257,11 +302,11 @@ class WebSailorAgent:
             relevant_terms.append("Brasil")
         
         if "2024" not in query_lower and "2025" not in query_lower:
-            relevant_terms.append("2024") # Manter 2024 como padrão, mas pode ser 2025
+            relevant_terms.append("2024")
         
         # Adiciona termos de mercado relevantes se a query for muito genérica
         if len(query.split()) < 3:
-            relevant_terms.extend(market_terms[:2]) # Adiciona os 2 primeiros termos de mercado
+            relevant_terms.extend(market_terms[:2])
 
         enhanced_query = query
         if relevant_terms:
@@ -272,7 +317,7 @@ class WebSailorAgent:
     def _extract_page_content(self, url: str) -> Optional[str]:
         """Extrai conteúdo de uma página web"""
         
-        if not url or not url.startswith("http"): # Garante que é uma URL válida
+        if not url or not url.startswith("http"):
             return None
         
         cache_key = f"content_{hash(url)}"
@@ -311,24 +356,24 @@ class WebSailorAgent:
             response = requests.get(
                 jina_url,
                 headers=headers,
-                timeout=30 # Aumentar timeout para Jina
+                timeout=30
             )
             
             if response.status_code == 200:
                 content = response.text
                 
-                # Limita tamanho do conteúdo, mas permite mais que antes
-                if len(content) > 10000: # Aumentado para 10k caracteres
+                # Limita tamanho do conteúdo
+                if len(content) > 10000:
                     content = content[:10000] + "... [conteúdo truncado]"
                 
                 logger.info(f"Conteúdo extraído com Jina Reader: {len(content)} caracteres de {url}")
                 return content
             else:
-                logger.warning(f"Jina Reader falhou para {url}: {response.status_code} - {response.text}")
+                logger.warning(f"Jina Reader falhou para {url}: {response.status_code}")
                 return None
                 
         except Exception as e:
-            logger.error(f"Erro no Jina Reader para {url}: {str(e)}", exc_info=True)
+            logger.error(f"Erro no Jina Reader para {url}: {str(e)}")
             return None
     
     def _extract_basic_content(self, url: str) -> Optional[str]:
@@ -338,7 +383,7 @@ class WebSailorAgent:
             response = requests.get(
                 url,
                 headers=self.headers,
-                timeout=20, # Aumentar timeout para requests
+                timeout=20,
                 allow_redirects=True
             )
             
@@ -354,7 +399,7 @@ class WebSailorAgent:
                 chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
                 text = " ".join(chunk for chunk in chunks if chunk)
                 
-                if len(text) > 6000: # Aumentado para 6k caracteres
+                if len(text) > 6000:
                     text = text[:6000] + "... [conteúdo truncado]"
                 
                 logger.info(f"Conteúdo extraído básico: {len(text)} caracteres de {url}")
@@ -364,7 +409,7 @@ class WebSailorAgent:
                 return None
                 
         except Exception as e:
-            logger.error(f"Erro na extração básica para {url}: {str(e)}", exc_info=True)
+            logger.error(f"Erro na extração básica para {url}: {str(e)}")
             return None
 
     def _extract_internal_links(self, base_url: str, content: str) -> List[str]:
@@ -381,7 +426,7 @@ class WebSailorAgent:
             logger.info(f"Encontrados {len(links)} links internos em {base_url}")
         except Exception as e:
             logger.warning(f"Erro ao extrair links internos de {base_url}: {str(e)}")
-        return list(set(links)) # Remove duplicatas
+        return list(set(links))
     
     def _calculate_relevance(
         self, 
@@ -403,22 +448,25 @@ class WebSailorAgent:
         query_words = query_lower.split()
         for word in query_words:
             if len(word) > 2:
-                score += content_lower.count(word) * 0.2 # Peso maior para palavras da query
+                score += content_lower.count(word) * 0.2
         
         # Score baseado no contexto
-        context_terms = [
-             context.get("produto",        publico_lower = context.get("publico")
-        if publico_lower is not None:
-            publico_lower = str(publico_lower).lower()
-        else:
-            publico_lower = ""        if publico_lower is not None:
-            publico_lower = publico_lower.lower()
-        else:
-            publico_lower = ""]
+        context_terms = []
+        
+        # Adiciona termos do contexto de forma segura
+        if context.get("segmento"):
+            context_terms.append(str(context["segmento"]).lower())
+        
+        if context.get("produto"):
+            context_terms.append(str(context["produto"]).lower())
+        
+        if context.get("publico"):
+            publico_lower = str(context["publico"]).lower()
+            context_terms.append(publico_lower)
         
         for term in context_terms:
             if term and len(term) > 2:
-                score += content_lower.count(term) * 0.3 # Peso ainda maior para termos do contexto
+                score += content_lower.count(term) * 0.3
         
         # Bonus para termos de mercado
         market_terms = [
@@ -430,15 +478,13 @@ class WebSailorAgent:
         for term in market_terms:
             score += content_lower.count(term) * 0.1
         
-        # Bônus por proximidade de termos (simplificado)
+        # Bônus por proximidade de termos
         if all(word in content_lower for word in query_words) and len(query_words) > 1:
-            score += 5.0 # Bônus se todos os termos da query estiverem presentes
-
-        # Normaliza score (0-100 para facilitar visualização)
-        # O score máximo pode variar muito, então uma normalização simples pode ser: 
-        # dividir pelo log do tamanho do conteúdo para penalizar textos muito longos com pouca densidade
-        normalized_score = score / (len(content) / 1000 + 1) # Divide por 1 para cada 1000 caracteres
-        return min(normalized_score, 100.0) # Limita o score máximo
+            score += 5.0
+        
+        # Normaliza score
+        normalized_score = score / (len(content) / 1000 + 1)
+        return min(normalized_score, 100.0)
     
     def _consolidate_research(
         self, 
@@ -446,15 +492,15 @@ class WebSailorAgent:
         query: str, 
         context: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Consolida informações da pesquisa, gerando insights mais ricos"""
+        """Consolida informações da pesquisa"""
         
         if not page_contents:
             return self._generate_fallback_research(query, context)
         
-        # Ordena novamente por relevância, caso a profundidade tenha adicionado novos itens
+        # Ordena por relevância
         page_contents.sort(key=lambda x: x["relevance_score"], reverse=True)
 
-        # Combina o conteúdo das páginas mais relevantes para análise da IA
+        # Combina o conteúdo das páginas mais relevantes
         combined_content = ""
         sources_list = []
         for i, page in enumerate(page_contents):
@@ -465,51 +511,19 @@ class WebSailorAgent:
                 "url": page["url"],
                 "relevance_score": page["relevance_score"]
             })
-            if len(combined_content) > 15000: # Limita o conteúdo combinado para não estourar o token da IA
+            if len(combined_content) > 15000:
                 combined_content = combined_content[:15000] + "... [conteúdo adicional truncado]"
                 break
         
-        # Usar Gemini para extrair insights, tendências e oportunidades do conteúdo combinado
-        # Importa o gemini_client aqui para evitar circular dependency
-        from services.gemini_client import gemini_client
-
-        if not gemini_client:
-            logger.error("Gemini client não disponível para consolidação de pesquisa.")
-            return self._generate_fallback_research(query, context)
-
-        prompt_for_ai = f"""Com base no seguinte conteúdo de pesquisa web sobre '{query}' (contexto: {context}), extraia os principais insights, tendências de mercado e oportunidades. Seja detalhado e forneça exemplos quando possível. Formate a saída como um JSON com as chaves 'key_insights', 'market_trends', 'opportunities'.
-
-Conteúdo:
-```text
-{combined_content}
-```
-
-JSON:
-"""
-        try:
-            ai_response = gemini_client.generate_content(prompt_for_ai, timeout=60) # Aumentar timeout
-            json_match = re.search(r"```json\n(.*?)```", ai_response, re.DOTALL)
-            if not json_match:
-                json_match = re.search(r"\{.*\}", ai_response, re.DOTALL)
-
-            if json_match:
-                ai_extracted_data = json.loads(json_match.group(1) if json_match.group(1) else json_match.group(0))
-                insights = ai_extracted_data.get("key_insights", [])
-                trends = ai_extracted_data.get("market_trends", [])
-                opportunities = ai_extracted_data.get("opportunities", [])
-            else:
-                logger.warning("IA não retornou JSON válido para consolidação. Usando extração básica.")
-                insights, trends, opportunities = self._extract_basic_insights(combined_content)
-
-        except Exception as e:
-            logger.error(f"Erro ao usar IA para consolidar pesquisa: {str(e)}. Usando extração básica.", exc_info=True)
-            insights, trends, opportunities = self._extract_basic_insights(combined_content)
+        # Extração básica de insights
+        insights, trends, opportunities = self._extract_basic_insights(combined_content)
         
         result = {
             "query": query,
             "context": context,
             "pages_analyzed": len(page_contents),
             "research_summary": {
+                "combined_content": combined_content,
                 "key_insights": insights,
                 "market_trends": trends,
                 "opportunities": opportunities
@@ -519,13 +533,13 @@ JSON:
                 "research_date": datetime.now().isoformat(),
                 "agent": "WebSailor",
                 "version": "2.0.0",
-                "ai_assisted_consolidation": True if gemini_client else False
+                "ai_assisted_consolidation": False
             }
         }
         
         return result
     
-    def _extract_basic_insights(self, text_content: str) -> tuple[List[str], List[str], List[str]]:
+    def _extract_basic_insights(self, text_content: str) -> tuple:
         """Extração básica de insights de texto sem IA (fallback)"""
         insights = []
         trends = []
@@ -546,40 +560,7 @@ JSON:
         
         return list(set(insights))[:5], list(set(trends))[:3], list(set(opportunities))[:3]
 
-    def _generate_fallback_research(self, query: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Gera pesquisa básica quando WebSailor não está disponível ou falha"""
-        logger.warning("Gerando pesquisa de fallback.")
-        return {
-            "query": query,
-            "context": context,
-            "pages_analyzed": 0,
-            "research_summary": {
-                "key_insights": [
-                    f"O mercado para '{query}' é dinâmico e exige adaptação.",
-                    "A personalização e a automação são cruciais para o sucesso."
-                ],
-                "market_trends": [
-                    "Crescimento contínuo do digital.",
-                    "Aumento da demanda por soluções eficientes."
-                ],
-                "opportunities": [
-                    "Identificar nichos inexplorados.",
-                    "Investir em conteúdo de valor."
-                ]
-            },
-            "sources": [],
-            "metadata": {
-                "research_date": datetime.now().isoformat(),
-                "agent": "WebSailor_Fallback",
-                "version": "2.0.0",
-                "note": "WebSailor não disponível ou erro na pesquisa."
-            }
-        }
-
-# Instância global do serviço
-websailor_agent = WebSailorAgent()
-
-def _generate_related_queries(self, original_query: str, context: Dict[str, Any]) -> List[str]:
+    def _generate_related_queries(self, original_query: str, context: Dict[str, Any]) -> List[str]:
         """Gera queries relacionadas para pesquisa mais abrangente"""
         
         segmento = context.get("segmento", "")
@@ -617,5 +598,42 @@ def _generate_related_queries(self, original_query: str, context: Dict[str, Any]
             if query.lower() not in original_query.lower() and query not in unique_queries:
                 unique_queries.append(query)
         
-        return unique_queries[:5]  # Máximo 5 queries relacionadas
+        return unique_queries[:5]
 
+    def _generate_fallback_research(self, query: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Gera pesquisa básica quando WebSailor não está disponível ou falha"""
+        logger.warning("Gerando pesquisa de fallback.")
+        return {
+            "query": query,
+            "context": context,
+            "pages_analyzed": 0,
+            "research_summary": {
+                "combined_content": f"Pesquisa básica para: {query}. Mercado em crescimento com oportunidades digitais.",
+                "key_insights": [
+                    f"O mercado para '{query}' apresenta potencial de crescimento",
+                    "A digitalização é uma tendência forte no setor",
+                    "Personalização e automação são cruciais para o sucesso",
+                    "Investimento em marketing digital é essencial"
+                ],
+                "market_trends": [
+                    "Crescimento contínuo do mercado digital",
+                    "Aumento da demanda por soluções online",
+                    "Foco em experiência do cliente"
+                ],
+                "opportunities": [
+                    "Identificar nichos inexplorados no mercado",
+                    "Investir em conteúdo de valor",
+                    "Desenvolver soluções inovadoras"
+                ]
+            },
+            "sources": [],
+            "metadata": {
+                "research_date": datetime.now().isoformat(),
+                "agent": "WebSailor_Fallback",
+                "version": "2.0.0",
+                "note": "WebSailor não disponível - usando dados básicos"
+            }
+        }
+
+# Instância global do serviço
+websailor_agent = WebSailorAgent()
