@@ -94,10 +94,10 @@ class HuggingFaceClient:
         prompt = f"""
         Como especialista em estratégia de mercado, analise o seguinte contexto e forneça 5 insights estratégicos únicos:
         
-        Segmento: {context.get(\'segmento\', \'Não especificado\')}
-        Produto: {context.get(\'produto\', \'Não especificado\')}
-        Público: {context.get(\'publico\', \'Não especificado\')}
-        Preço: {context.get(\'preco\', \'Não especificado\')}
+        Segmento: {context.get('segmento', 'Não especificado')}
+        Produto: {context.get('produto', 'Não especificado')}
+        Público: {context.get('publico', 'Não especificado')}
+        Preço: {context.get('preco', 'Não especificado')}
         
         Foque em:
         1. Oportunidades ocultas no mercado
@@ -117,5 +117,3 @@ try:
 except Exception as e:
     logger.error(f"Erro ao inicializar HuggingFace client: {str(e)}")
     huggingface_client = None
-
-

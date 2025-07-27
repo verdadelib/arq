@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 >nul
 REM ARQV30 Enhanced v2.0 ULTRA-ROBUSTO - Script de Instalação Windows
 REM Execute este arquivo para instalar todas as dependências
 
@@ -22,11 +23,6 @@ if errorlevel 1 (
 
 echo ✅ Python encontrado:
 python --version
-echo.
-
-REM Verifica versão do Python
-for /f "tokens=2" %%i in ('python --version 2^>^&1') do set PYTHON_VERSION=%%i
-echo Versão do Python: %PYTHON_VERSION%
 echo.
 
 REM Cria ambiente virtual
@@ -139,26 +135,32 @@ echo 🚀 Próximos passos:
 echo.
 echo 1. ✅ Arquivo .env já configurado com suas chaves
 echo.
-echo 2. Execute run.bat para iniciar a aplicação
+echo 2. ⚠️ IMPORTANTE: Configure uma chave válida do Google Search
+echo    Acesse: https://console.developers.google.com/
+echo    Ative: Custom Search API
+echo    Substitua GOOGLE_SEARCH_KEY no arquivo .env
 echo.
-echo 3. Acesse http://localhost:5000 no seu navegador
+echo 3. Execute run.bat para iniciar a aplicação
 echo.
-echo 4. Teste com uma análise simples primeiro
+echo 4. Acesse http://localhost:5000 no seu navegador
 echo.
-echo 5. Para análises ULTRA-ROBUSTAS, todas as APIs estão configuradas
+echo 5. Teste com uma análise simples primeiro
 echo.
 echo ========================================
 echo.
 echo 📚 SISTEMA ULTRA-ROBUSTO PRONTO!
 echo Agora você tem acesso a análises de mercado
-echo com profundidade de consultoria de R$ 50.000/hora
+echo com profundidade de consultoria profissional
 echo.
 echo 🔥 RECURSOS ATIVADOS:
 echo - Google Gemini Pro para análise IA
 echo - Supabase para banco de dados
-echo - WebSailor para pesquisa web
+echo - WebSailor para pesquisa web REAL
 echo - HuggingFace para análise complementar
-echo - Google Search para dados reais
+echo - DuckDuckGo para pesquisa alternativa
 echo - Jina AI para extração de conteúdo
+echo.
+echo ⚠️ NOTA: Para pesquisa Google completa, configure
+echo    uma chave válida do Google Custom Search API
 echo.
 pause

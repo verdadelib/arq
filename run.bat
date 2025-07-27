@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 >nul
 REM ARQV30 Enhanced v2.0 ULTRA-ROBUSTO - Script de Execução Windows
 REM Execute este arquivo para iniciar a aplicação
 
@@ -63,12 +64,12 @@ echo.
 echo 🌐 Servidor: http://localhost:5000
 echo 📊 Interface: Análise Ultra-Detalhada de Mercado
 echo 🤖 IA: Google Gemini Pro + HuggingFace
-echo 🔍 Pesquisa: WebSailor + Google Search + Jina AI
+echo 🔍 Pesquisa: WebSailor + Jina AI + DuckDuckGo
 echo 💾 Banco: Supabase PostgreSQL
 echo.
 echo ⚡ RECURSOS ATIVADOS:
 echo - Análise com múltiplas IAs
-echo - Pesquisa web profunda
+echo - Pesquisa web profunda REAL
 echo - Processamento de anexos inteligente
 echo - Geração de relatórios PDF
 echo - Avatar ultra-detalhado
